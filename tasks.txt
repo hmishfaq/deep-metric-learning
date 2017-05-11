@@ -1,0 +1,6 @@
+* load cars dataset
+* load birds dataset
+* some better hard negative and positive sampling
+* network architecture something better
+* evaluation metrics
+* plots
