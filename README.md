@@ -1,3 +1,9 @@
+### How to run:
+1. Install visdom (https://github.com/facebookresearch/visdom)
+2. Run train.py
+
+
+
 # A PyTorch Implementation for Triplet Networks
 
 This repository contains a [PyTorch](http://pytorch.org/) implementation for triplet networks.
