@@ -1,0 +1,4 @@
+awk '$2 == 1 { print $1 }' train_test_split.txt > train_idx.txt
+awk '$2 == 0 { print $1 }' train_test_split.txt > test_idx.txt
+grep -f <(sed -e 's/^/^/ ; s/$/\\b/' train_idx.txt) image_class_labels.txt > train_class_label.txt
+grep -f <(sed -e 's/^/^/ ; s/$/\\b/' test_idx.txt) image_class_labels.txt > test_class_label.txt
