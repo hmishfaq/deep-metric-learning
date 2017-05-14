@@ -9,8 +9,6 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
-from triplet_mnist_loader import MNIST_t
-from triplet_image_loader import TripletImageLoader
 from triplet_cub_loader import CUB_t
 from tripletnet import Tripletnet
 from visdom import Visdom
@@ -40,13 +38,15 @@ parser.add_argument('--resume', default='', type=str,
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--name', default='TripletNet', type=str,
                     help='name of experiment')
+parser.add_argument('--data', default='datasets/birds', type=str,
+                    help='name of experiment')
 
 best_acc = 0
-
 
 def main():
     global args, best_acc
     args = parser.parse_args()
+    data_path = args.data
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
     if args.cuda:
@@ -55,18 +55,23 @@ def main():
     plotter = VisdomLinePlotter(env_name=args.name)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+
+    num_classes = 5
     train_loader = torch.utils.data.DataLoader(
-        CUB_t('../data', train=True, download=True,
-                       transform=transforms.Compose([
+        CUB_t(data_path, n_train_triplets=num_classes*64, train=True,
+                 transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
+                       ]),
+              num_classes=num_classes),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
-        CUB_t('../data', train=False, transform=transforms.Compose([
+        CUB_t(data_path, n_test_triplets=num_classes*16, train=False,
+                 transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
+                       ]),
+             num_classes=num_classes),
         batch_size=args.batch_size, shuffle=True, **kwargs)
 
     class Net(nn.Module):
