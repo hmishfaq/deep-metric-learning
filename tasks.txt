@@ -1,7 +1,6 @@
-* load cars dataset
-* load birds dataset
-* construct triplets
+* load cars datas
 * some better hard negative and positive sampling
+* some better semi-hard negative and positive sampling
 * network architecture something better
 * evaluation metrics
 * plots
