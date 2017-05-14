@@ -63,6 +63,9 @@ class CUB_t(data.Dataset):
         img1 = self.loader(os.path.join(self.im_base_path, self.im_paths[idx1]))
         img2 = self.loader(os.path.join(self.im_base_path, self.im_paths[idx2]))
         img3 = self.loader(os.path.join(self.im_base_path, self.im_paths[idx3]))
+        img1 = img1.resize((64,64))
+        img2 = img2.resize((64,64))
+        img3 = img3.resize((64,64))
 
         if self.transform is not None:
             img1 = self.transform(img1)
