@@ -17,7 +17,7 @@ from random import shuffle
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+parser.add_argument('--batch-size', type=int, default=4, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
@@ -135,7 +135,6 @@ def main():
             losses = np.mean(losses_triplet, axis=0)
            
            # hard_index = np.argsort(losses)[-5:] # index for the hard examples
-           # train_loader = [train_loader[i] for i in hard_index]
               
             train_loader = torch.utils.data.DataLoader(
                 CUB_t(data_path, n_train_triplets=num_classes*64, train=True,
@@ -147,7 +146,7 @@ def main():
                 batch_size=args.batch_size, shuffle=True, **kwargs)
         
         # train for one epoch
-        losses_triplet.append(train(train_loader, tnet, criterion, optimizer, epoch))
+        train(train_loader, tnet, criterion, optimizer, epoch)
         # evaluate on validation set
         acc = test(test_loader, tnet, criterion, epoch)
 
@@ -165,17 +164,26 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
     accs = AverageMeter()
     emb_norms = AverageMeter()
     
-    losses_triplet = []
+    triplets = []
+    dista_triplet = []
+    distb_triplet = []
         
     # switch to train mode
     tnet.train()
-    for batch_idx, (data1, data2, data3) in enumerate(train_loader):
+    for batch_idx, (data1, data2, data3, idx1, idx2, idx3) in enumerate(train_loader):
+           
         if args.cuda:
             data1, data2, data3 = data1.cuda(), data2.cuda(), data3.cuda()
+            
         data1, data2, data3 = Variable(data1), Variable(data2), Variable(data3)
 
         # compute output
         dista, distb, embedded_x, embedded_y, embedded_z = tnet(data1, data2, data3)
+        for i in range(len(idx1)):
+            triplets.append([idx1[i], idx2[i], idx3[i]])
+            dista_triplet.append(dista[i])
+            distb_triplet.append(distb[i])
+
         # 1 means, dista should be larger than distb
         target = torch.FloatTensor(dista.size()).fill_(1)
         if args.cuda:
@@ -183,7 +191,6 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
         target = Variable(target)
         
         loss_triplet = criterion(dista, distb, target)
-        losses_triplet.append(loss_triplet[0])
         
         loss_embedd = embedded_x.norm(2) + embedded_y.norm(2) + embedded_z.norm(2)
         loss = loss_triplet + 0.001 * loss_embedd
@@ -211,7 +218,8 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
     plotter.plot('acc', 'train', epoch, accs.avg)
     plotter.plot('loss', 'train', epoch, losses.avg)
     plotter.plot('emb_norms', 'train', epoch, emb_norms.avg)
-    return losses_triplet
+    print(triplets, dista_triplet, distb_triplet)
+    return triplets, dista_triplet, distb_triplet
 
 def test(test_loader, tnet, criterion, epoch):
     losses = AverageMeter()
@@ -219,7 +227,7 @@ def test(test_loader, tnet, criterion, epoch):
 
     # switch to evaluation mode
     tnet.eval()
-    for batch_idx, (data1, data2, data3) in enumerate(test_loader):
+    for batch_idx, (data1, data2, data3, idx1, idx2, idx3) in enumerate(test_loader):
         if args.cuda:
             data1, data2, data3 = data1.cuda(), data2.cuda(), data3.cuda()
         data1, data2, data3 = Variable(data1), Variable(data2), Variable(data3)
