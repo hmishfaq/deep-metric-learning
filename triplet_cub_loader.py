@@ -1,6 +1,7 @@
 from __future__ import print_function
 import torch.utils.data as data
 import os
+import math
 import errno
 import torch
 import json
@@ -101,22 +102,29 @@ class CUB_t(data.Dataset):
                                  int(ntriplets/nc), replace=True)
 
             for i in range(a.shape[0]):
-                triplets.append([int(a[i]), int(c[i]), int(b[i])])
-            for i in range(a.shape[0]):
                 anchor,positive, negative =  int(a[i]), int(c[i]), int(b[i])
                 if self.train:
-                    triplets.append([self.train_idx[anchor],
+                    triplets.append((self.train_idx[anchor],
                                      self.train_idx[positive],
-                                     self.train_idx[negative]])          
+                                     self.train_idx[negative]))          
                 else:
-                    triplets.append([self.test_idx[anchor],
+                    triplets.append((self.test_idx[anchor],
                                      self.test_idx[positive],
-                                     self.test_idx[negative]])          
+                                     self.test_idx[negative]))          
 
         print('Done!')
         return triplets  # save the triplets to class
 
     def regenerate_triplet_list(self, ntriplets, sampler, num_hard):
-        print("Implement me!!")
-        self.make_triplet_list(ntriplets)
-        # TODO: use sampler.ChooseXX to select some hard triplers
+        assert(self.train)
+        print("Processing Triplet Regeneration ...")
+        # negatives is a tuple of anchors and negative examples
+        num_random_triplets = ntriplets - num_hard
+        # adjust number of random triplets so that it is a multiple of num_classes
+        num_random_triplets = int(math.ceil(num_random_triplets)/self.num_classes)*self.num_classes
+        num_hard = ntriplets - num_random_triplets
+        print("Number of hard triplets %d ..." % num_hard)
+        neg_hard_triplets = sampler.ChooseNegatives(num_hard)
+        random_triplets = self.make_triplet_list(num_random_triplets)
+        self.triplets_train = random_triplets + neg_hard_triplets
+        np.random.shuffle(self.triplets_train)

@@ -48,7 +48,7 @@ parser.add_argument('--triplet_freq', type=int, default=3, metavar='N',
 
 best_acc = 0
 
-OurSampler = hard_mining.NHardestSampler
+OurSampler = hard_mining.NHardestTripletSampler
 
 def main():
     global args, best_acc
@@ -133,7 +133,7 @@ def main():
     n_parameters = sum([p.data.nelement() for p in tnet.parameters()])
     print('  + Number of params: {}'.format(n_parameters))
 
-    sampler = OurSampler(num_classes)
+    sampler = OurSampler(num_classes, num_triplets/args.batch_size)
     
     for epoch in range(1, args.epochs + 1):
         # train for one epoch
