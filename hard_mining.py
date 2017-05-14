@@ -67,7 +67,7 @@ class NHardestSampler(Sampler):
         super(NHardestSampler, self).__init__(num_classes)
         self.negatives = []  # list of anchor, negative pairs
 
-    def Reset():
+    def Reset(self):
         self.negatives = []
 
     def SampleNegatives(self, dista, distb, triplet_loss, (idx1, idx2, idx3)):

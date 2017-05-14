@@ -113,10 +113,10 @@ class CUB_t(data.Dataset):
                                      self.test_idx[positive],
                                      self.test_idx[negative]])          
 
-        def regenerate_triplet_list(self, ntriplets, sampler, num_hard):
-            print("Implement me!!")
-            self.make_triplet_list(ntriplets)
-            # TODO: use sampler.ChooseXX to select some hard triplers
-
         print('Done!')
         return triplets  # save the triplets to class
+
+    def regenerate_triplet_list(self, ntriplets, sampler, num_hard):
+        print("Implement me!!")
+        self.make_triplet_list(ntriplets)
+        # TODO: use sampler.ChooseXX to select some hard triplers
