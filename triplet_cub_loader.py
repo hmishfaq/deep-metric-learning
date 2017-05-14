@@ -22,7 +22,7 @@ class CUB_t(data.Dataset):
     train_class_label_file ='train_class_label.txt'
     test_class_label_file ='test_class_label.txt'
 
-    def __init__(self, root, n_train_triplets=50000, n_test_triplets=10000, num_classes=-1, train=True, transform=None, target_transform=None, download=False):
+    def __init__(self, root, n_train_triplets=500, n_test_triplets=100, num_classes=-1, train=True, transform=None, target_transform=None, download=False):
 
         self.loader = default_image_loader
         self.root = root
@@ -71,8 +71,8 @@ class CUB_t(data.Dataset):
             img1 = self.transform(img1)
             img2 = self.transform(img2)
             img3 = self.transform(img3)
-
-        return img1, img2, img3
+        
+        return img1, img2, img3, idx1, idx2, idx3
 
     def __len__(self):
         if self.train:
