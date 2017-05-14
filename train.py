@@ -11,6 +11,7 @@ from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
 from triplet_mnist_loader import MNIST_t
 from triplet_image_loader import TripletImageLoader
+from triplet_cub_loader import CUB_t
 from tripletnet import Tripletnet
 from visdom import Visdom
 import numpy as np
@@ -55,14 +56,14 @@ def main():
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     train_loader = torch.utils.data.DataLoader(
-        MNIST_t('../data', train=True, download=True,
+        CUB_t('../data', train=True, download=True,
                        transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
-        MNIST_t('../data', train=False, transform=transforms.Compose([
+        CUB_t('../data', train=False, transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])),
@@ -255,3 +256,4 @@ def accuracy(dista, distb):
 
 if __name__ == '__main__':
     main()    
+
