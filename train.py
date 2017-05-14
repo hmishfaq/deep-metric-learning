@@ -48,6 +48,7 @@ parser.add_argument('--triplet_freq', type=int, default=3, metavar='N',
 
 best_acc = 0
 
+hard_frac = 0.1
 OurSampler = hard_mining.NHardestTripletSampler
 
 def main():
@@ -153,7 +154,7 @@ def main():
         # reset sampler and regenerate triplets every few epochs
         if epoch % args.triplet_freq == 0:
             # TODO: regenerate triplets
-            train_data_set.regenerate_triplet_list(num_triplets, sampler, num_triplets/4)
+            train_data_set.regenerate_triplet_list(num_triplets, sampler, num_triplets*hard_frac)
             # then reset sampler
             sampler.Reset()
 
