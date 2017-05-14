@@ -124,6 +124,7 @@ class CUB_t(data.Dataset):
         num_random_triplets = int(math.ceil(num_random_triplets)/self.num_classes)*self.num_classes
         num_hard = ntriplets - num_random_triplets
         print("Number of hard triplets %d ..." % num_hard)
+        print("Number of total triplets %d ..." % ntriplets)
         neg_hard_triplets = sampler.ChooseNegatives(num_hard)
         random_triplets = self.make_triplet_list(num_random_triplets)
         self.triplets_train = random_triplets + neg_hard_triplets
