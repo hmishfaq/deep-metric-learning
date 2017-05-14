@@ -15,6 +15,8 @@ from visdom import Visdom
 import numpy as np
 from random import shuffle
 
+import hard_mining
+
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('--batch-size', type=int, default=64, metavar='N',
@@ -41,10 +43,12 @@ parser.add_argument('--name', default='TripletNet', type=str,
                     help='name of experiment')
 parser.add_argument('--data', default='datasets/birds', type=str,
                     help='name of experiment')
-parser.add_argument('--load-triplets', type=int, default=3, metavar='N',
+parser.add_argument('--triplet_freq', type=int, default=3, metavar='N',
                     help='epochs before new triplets list (default: 3)')
 
 best_acc = 0
+
+OurSampler = hard_mining.NHardestSampler
 
 def main():
     global args, best_acc
@@ -60,13 +64,15 @@ def main():
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
     num_classes = 5
+    num_triplets = num_classes*64
+    train_data_set = CUB_t(data_path, n_train_triplets=num_triplets, train=True,
+                           transform=transforms.Compose([
+                             transforms.ToTensor(),
+                             transforms.Normalize((0.1307,), (0.3081,))
+                           ]),
+                           num_classes=num_classes)
     train_loader = torch.utils.data.DataLoader(
-        CUB_t(data_path, n_train_triplets=num_classes*64, train=True,
-                 transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ]),
-              num_classes=num_classes),
+        train_data_set,
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
         CUB_t(data_path, n_test_triplets=num_classes*16, train=False,
@@ -126,28 +132,12 @@ def main():
 
     n_parameters = sum([p.data.nelement() for p in tnet.parameters()])
     print('  + Number of params: {}'.format(n_parameters))
+
+    sampler = OurSampler(num_classes)
     
-    losses_triplet = []
     for epoch in range(1, args.epochs + 1):
-        
-        # Load triplets
-        if np.mod(epoch, args.load_triplets) == 0:
-            losses = np.mean(losses_triplet, axis=0)
-           
-           # hard_index = np.argsort(losses)[-5:] # index for the hard examples
-           # train_loader = [train_loader[i] for i in hard_index]
-              
-            train_loader = torch.utils.data.DataLoader(
-                CUB_t(data_path, n_train_triplets=num_classes*64, train=True,
-                         transform=transforms.Compose([
-                                   transforms.ToTensor(),
-                                   transforms.Normalize((0.1307,), (0.3081,))
-                               ]),
-                      num_classes=num_classes),
-                batch_size=args.batch_size, shuffle=True, **kwargs)
-        
         # train for one epoch
-        losses_triplet.append(train(train_loader, tnet, criterion, optimizer, epoch))
+        train(train_loader, tnet, criterion, optimizer, epoch, sampler)
         # evaluate on validation set
         acc = test(test_loader, tnet, criterion, epoch)
 
@@ -160,16 +150,21 @@ def main():
             'best_prec1': best_acc,
         }, is_best)
 
-def train(train_loader, tnet, criterion, optimizer, epoch):
+        # reset sampler and regenerate triplets every few epochs
+        if epoch % args.triplet_freq == 0:
+            # TODO: regenerate triplets
+            train_data_set.regenerate_triplet_list(num_triplets, sampler, num_triplets/4)
+            # then reset sampler
+            sampler.Reset()
+
+def train(train_loader, tnet, criterion, optimizer, epoch, sampler):
     losses = AverageMeter()
     accs = AverageMeter()
     emb_norms = AverageMeter()
     
-    losses_triplet = []
-        
     # switch to train mode
     tnet.train()
-    for batch_idx, (data1, data2, data3) in enumerate(train_loader):
+    for batch_idx, (data1, data2, data3, idx1, idx2, idx3) in enumerate(train_loader):
         if args.cuda:
             data1, data2, data3 = data1.cuda(), data2.cuda(), data3.cuda()
         data1, data2, data3 = Variable(data1), Variable(data2), Variable(data3)
@@ -183,7 +178,7 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
         target = Variable(target)
         
         loss_triplet = criterion(dista, distb, target)
-        losses_triplet.append(loss_triplet[0])
+        sampler.SampleNegatives(dista, distb, loss_triplet, (idx1, idx2, idx3))
         
         loss_embedd = embedded_x.norm(2) + embedded_y.norm(2) + embedded_z.norm(2)
         loss = loss_triplet + 0.001 * loss_embedd
@@ -211,7 +206,6 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
     plotter.plot('acc', 'train', epoch, accs.avg)
     plotter.plot('loss', 'train', epoch, losses.avg)
     plotter.plot('emb_norms', 'train', epoch, emb_norms.avg)
-    return losses_triplet
 
 def test(test_loader, tnet, criterion, epoch):
     losses = AverageMeter()
@@ -219,7 +213,7 @@ def test(test_loader, tnet, criterion, epoch):
 
     # switch to evaluation mode
     tnet.eval()
-    for batch_idx, (data1, data2, data3) in enumerate(test_loader):
+    for batch_idx, (data1, data2, data3, _, _, _) in enumerate(test_loader):
         if args.cuda:
             data1, data2, data3 = data1.cuda(), data2.cuda(), data3.cuda()
         data1, data2, data3 = Variable(data1), Variable(data2), Variable(data3)

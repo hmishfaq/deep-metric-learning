@@ -9,6 +9,7 @@ import numpy as np
 import csv
 import pandas as pd 
 from PIL import Image
+import hard_mining
 
 # README          bounding_boxes.txt  image_class_labels.txt  images.txt      shell_commands.txt  test_idx.txt        train_idx.txt
 # attributes      classes.txt     images          parts           test_class_label.txt    train_class_label.txt   train_test_split.txt
@@ -72,7 +73,7 @@ class CUB_t(data.Dataset):
             img2 = self.transform(img2)
             img3 = self.transform(img3)
 
-        return img1, img2, img3
+        return img1, img2, img3, idx1, idx2, idx3
 
     def __len__(self):
         if self.train:
@@ -111,6 +112,11 @@ class CUB_t(data.Dataset):
                     triplets.append([self.test_idx[anchor],
                                      self.test_idx[positive],
                                      self.test_idx[negative]])          
+
+        def regenerate_triplet_list(self, ntriplets, sampler, num_hard):
+            print("Implement me!!")
+            self.make_triplet_list(ntriplets)
+            # TODO: use sampler.ChooseXX to select some hard triplers
 
         print('Done!')
         return triplets  # save the triplets to class
