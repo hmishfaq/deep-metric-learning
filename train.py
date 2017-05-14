@@ -127,26 +127,20 @@ def main():
     n_parameters = sum([p.data.nelement() for p in tnet.parameters()])
     print('  + Number of params: {}'.format(n_parameters))
     
-    losses_triplet = []
-    for epoch in range(1, args.epochs + 1):
+            
+    for epoch in range(1, args.epochs + 1):       
         
         # Load triplets
-        if np.mod(epoch, args.load_triplets) == 0:
-            losses = np.mean(losses_triplet, axis=0)
-           
-           # hard_index = np.argsort(losses)[-5:] # index for the hard examples
-              
-            train_loader = torch.utils.data.DataLoader(
-                CUB_t(data_path, n_train_triplets=num_classes*64, train=True,
-                         transform=transforms.Compose([
-                                   transforms.ToTensor(),
-                                   transforms.Normalize((0.1307,), (0.3081,))
-                               ]),
-                      num_classes=num_classes),
-                batch_size=args.batch_size, shuffle=True, **kwargs)
+        if np.mod(epoch, args.load_triplets) == 1:
+            triplets= []
+            dista_triplet = []
+            distb_triplet = []
         
         # train for one epoch
-        train(train_loader, tnet, criterion, optimizer, epoch)
+        triplet, dista, distb = train(train_loader, tnet, criterion, optimizer, epoch)
+        triplets.append(triplet)
+        dista_triplet.append(dista)
+        distb_triplet.append(distb)
         # evaluate on validation set
         acc = test(test_loader, tnet, criterion, epoch)
 
