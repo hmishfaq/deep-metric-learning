@@ -4,3 +4,4 @@
 * network architecture something better
 * evaluation metrics
 * plots
+* make a validation set, and use that instead of test for hyper-parameter tuning
