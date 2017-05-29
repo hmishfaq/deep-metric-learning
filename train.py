@@ -10,6 +10,7 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 import torch.backends.cudnn as cudnn
 from triplet_cub_loader import CUB_t
+from kNN_cub_loader import CUB_t_kNN
 from tripletnet import Tripletnet
 from visdom import Visdom
 import numpy as np
@@ -23,7 +24,13 @@ parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=5, metavar='N',
+parser.add_argument('--kNN-train-size', type=int, default=1000, metavar='N',
+                    help='input batch size for testing (default: 1000)')
+parser.add_argument('--kNN-test-size', type=int, default=100, metavar='N',
+                    help='input batch size for testing (default: 1000)')
+parser.add_argument('--kNN-k', type=int, default=1, metavar='N',
+                    help='k nearest neightbor (default: 1)')
+parser.add_argument('--epochs', type=int, default=1, metavar='N',
                     help='number of epochs to train (default: 5)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
@@ -82,7 +89,15 @@ def main():
                            transforms.Normalize((0.1307,), (0.3081,))
                        ]),
              num_classes=num_classes),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+        batch_size=args.test_batch_size, shuffle=True, **kwargs)
+    
+    kNN_loader = CUB_t_kNN(data_path, train=False,
+                 n_test = args.kNN_test_size, n_train = args.kNN_train_size,
+                 transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ]))
+
 
     # image length 
     im_len = 64
@@ -141,6 +156,7 @@ def main():
         train(train_loader, tnet, criterion, optimizer, epoch, sampler)
         # evaluate on validation set
         acc = test(test_loader, tnet, criterion, epoch)
+        acc_kNN = test_kNN(kNN_loader, tnet, epoch, args.kNN_k)
 
         # remember best acc and save checkpoint
         is_best = acc > best_acc
@@ -238,6 +254,51 @@ def test(test_loader, tnet, criterion, epoch):
     plotter.plot('loss', 'test', epoch, losses.avg)
     return accs.avg
 
+def test_kNN(kNN_loader, tnet, epoch, k):    
+    # switch to evaluation mode
+    tnet.embeddingnet.eval()
+
+    data_test, Y_test, data_train, Y_train = kNN_loader.getitem()
+    Y_test = np.array(Y_test, dtype = np.int64)
+    Y_train = np.array(Y_train, dtype = np.int64)
+    
+    # compute feature space
+    if args.cuda:
+        data_test = data_test.cuda()
+        data_train = data_train.cuda()
+    data_test = Variable(data_test)
+    data_train = Variable(data_train)
+    f_test = tnet.embeddingnet(data_test).data.numpy()
+    f_train = tnet.embeddingnet(data_train).data.numpy()
+    
+    acc = kNN(f_test, f_train, Y_test, Y_train, k)
+    
+    print('\nkNN Test: Accuracy: {:.3f}%\n'.format(100 * acc))
+    return acc
+    
+    
+def kNN(f_test, f_train, Y_test, Y_train, k):
+    num_test = f_test.shape[0]
+    num_train = f_train.shape[0]
+    Y_pred = np.zeros(num_test)
+    
+    # Compute distances
+    dists = np.zeros((num_test, num_train)) 
+    test_square = np.sum(np.square(f_test), axis=1).reshape(num_test, 1)
+    train_square = np.sum(np.square(f_train), axis=1)
+    multi = np.dot(f_test, np.transpose(f_train))
+    dists = np.sqrt(test_square + train_square - 2 * multi)
+    
+    # k nearest label
+    for i in xrange(num_test):
+        closest_y = Y_train[np.argsort(dists[i, :])[:k]]
+        Y_pred[i] = np.argmax(np.bincount(closest_y))
+    Y_pred = np.array(Y_pred, dtype = np.int64)
+    
+    acc = sum([Y_pred[i]==Y_test[i] for i in range(num_test)]) / num_test
+    
+    return acc
+
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     """Saves checkpoint to disk"""
     directory = "runs/%s/"%(args.name)
@@ -289,3 +350,4 @@ def accuracy(dista, distb):
 
 if __name__ == '__main__':
     main()  
+
