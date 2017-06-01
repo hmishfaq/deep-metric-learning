@@ -78,7 +78,7 @@ class NHardestTripletSampler(Sampler):
         self.positives = []
 
     """
-    Negatives with least distb.
+    Negatives with least distb. #b being neg
     """
     def SampleNegatives(self, dista, distb, triplet_loss, ids):
         idx1, idx2, idx3 = ids
