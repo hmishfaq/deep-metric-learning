@@ -15,9 +15,24 @@ from triplet_mnist_loader import MNIST_t
 from triplet_image_loader import TripletImageLoader
 from tripletnet import Tripletnet
 from visdom import Visdom
+import torchvision.models as models #
+
 import numpy as np
-from encoder import Net, Encoder
+from encoder import  Encoder
+from decoder import Decoder
 from vgg import VGG
+
+
+
+layer_names = ['conv1_1', 'relu1_1', 'conv1_2', 'relu1_2', 'pool1',
+               'conv2_1', 'relu2_1', 'conv2_2', 'relu2_2', 'pool2',
+               'conv3_1', 'relu3_1', 'conv3_2', 'relu3_2', 'conv3_3', 'relu3_3', 'conv3_4', 'relu3_4', 'pool3',
+               'conv4_1', 'relu4_1', 'conv4_2', 'relu4_2', 'conv4_3', 'relu4_3', 'conv4_4', 'relu4_4', 'pool4',
+               'conv5_1', 'relu5_1', 'conv5_2', 'relu5_2', 'conv5_3', 'relu5_3', 'conv5_4', 'relu5_4', 'pool5']
+default_content_layers = ['relu3_1', 'relu4_1', 'relu5_1']
+
+
+
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -123,10 +138,15 @@ def main():
     ######################
     ##### NEW
     ######################
+    #ngpu = int(args.ngpu)
+
     nz = int(args.nz)
     nef = int(args.nef)
     ndf = int(args.ndf)
     nc = 3
+    out_size = args.image_size // 16
+    Normalize = nn.BatchNorm2d
+    content_layers = default_content_layers
     ######################
     ######################
     descriptor = VGG()
@@ -160,14 +180,23 @@ def main():
     kld_criterion = nn.KLDivLoss()
     ###
     criterion = torch.nn.MarginRankingLoss(margin = args.margin)
-    optimizer = optim.SGD(tnet.parameters(), lr=args.lr, momentum=args.momentum)
 
-    n_parameters = sum([p.data.nelement() for p in tnet.parameters()])
-    print('  + Number of params: {}'.format(n_parameters))
+    #setup optimizer
+    parameters = list(tnet.parameters()) + list(decoder.parameters())
+    #optimizer = optim.SGD(tnet.parameters(), lr=args.lr, momentum=args.momentum)
+    optimizer = optim.SGD(parameters, lr=args.lr, momentum=args.momentum)
+    #encoder param
+    encoder_parameters = sum([p.data.nelement() for p in tnet.parameters()])
+    print('  + Number of Encoder params: {}'.format(encoder_parameters))
+    #decoder param
+    decoder_parameters = sum([p.data.nelement() for p in decoder.parameters()])
+    print('  + Number of decoder params: {}'.format(decoder_parameters))
+
+
 
     for epoch in range(1, args.epochs + 1):
         # train for one epoch
-        train(train_loader, tnet, criterion, optimizer, epoch)
+        train(train_loader, tnet, decoder,criterion, optimizer, epoch)
         # evaluate on validation set
         acc = test(test_loader, tnet, criterion, epoch)
 
@@ -193,13 +222,14 @@ def main():
 
 
 
-def train(train_loader, tnet, criterion, optimizer, epoch):
+def train(train_loader, tnet,decoder, criterion, optimizer, epoch):
     losses = AverageMeter()
     accs = AverageMeter()
     emb_norms = AverageMeter()
 
     # switch to train mode
     tnet.train()
+    decoder.train()
     for batch_idx, (data1, data2, data3) in enumerate(train_loader):
         if args.cuda:
             data1, data2, data3 = data1.cuda(), data2.cuda(), data3.cuda()
@@ -209,13 +239,33 @@ def train(train_loader, tnet, criterion, optimizer, epoch):
         dista, distb, embedded_x, embedded_y, embedded_z = tnet(data1, data2, data3)
         # 1 means, dista should be larger than distb
         target = torch.FloatTensor(dista.size()).fill_(1)
+
+        # These are feature output when data points are run through VGG19
+        vgg_target_data1 = descriptor(data1)
+        vgg_target_data2 = descriptor(data2)
+        vgg_target_data3 = descriptor(data3)
+
         if args.cuda:
             target = target.cuda()
         target = Variable(target)
         
+        # KLD loss (need to check "latent_label")
+        # kld = kld_criterion(F.log_softmax(latent_z), latent_labels)
+        # kld.backward(retain_variables=True)
+
+        #reconstruction errors for x, y, z
+        recon_x,recon_y,recon_z = decoder(embedded_x),decoder(embedded_y),decoder(embedded_z)
+        recon_x_features,recon_y_features,recon_z_features = descriptor(recon_x),descriptor(recon_y),descriptor(recon_z)
+        fpl_x = fpl_criterion(recon_x_features, vgg_target_data1)
+        fpl_y = fpl_criterion(recon_y_features, vgg_target_data2)
+        fpl_z = fpl_criterion(recon_z_features, vgg_target_data3)
+        fpl_x.backward()
+        fpl_y.backward()
+        fpl_z.backward()
+
         loss_triplet = criterion(dista, distb, target)
         loss_embedd = embedded_x.norm(2) + embedded_y.norm(2) + embedded_z.norm(2)
-        loss = loss_triplet + 0.001 * loss_embedd
+        loss = loss_triplet + 0.001 * loss_embedd + fpl_x+fpl_y+fpl_z
 
         # measure accuracy and record loss
         acc = accuracy(dista, distb)
