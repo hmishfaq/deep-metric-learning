@@ -17,6 +17,7 @@ from tripletnet import Tripletnet
 from visdom import Visdom
 import numpy as np
 from encoder import Net, Encoder
+from vgg import VGG
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -70,7 +71,18 @@ def main():
         torch.cuda.manual_seed(args.seed)
     global plotter 
     plotter = VisdomLinePlotter(env_name=args.name)
-
+    ######################
+    ##### NEW Transform for vgg19
+    #Normalization mean and standard deviation are set accordingly to the ones used
+    ######################
+    transform = transforms.Compose([
+        transforms.Scale(args.image_size),
+        transforms.CenterCrop(args.image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                            std=(0.229, 0.224, 0.225))])
+    ######################
+    ######################
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     train_loader = torch.utils.data.DataLoader(
         MNIST_t('../data', train=True, download=True,
