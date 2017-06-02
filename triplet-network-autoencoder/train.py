@@ -57,7 +57,8 @@ parser.add_argument('--nef', type=int, default=32,
                     help='number of output channels for the first encoder layer, default=32')
 parser.add_argument('--ndf', type=int, default=32,
                     help='number of output channels for the first decoder layer, default=32')
-
+parser.add_argument('--ngpu', type=int, default=1,
+                    help='number of GPUs to use')
 
 ###########################
 ###########################
@@ -65,6 +66,7 @@ parser.add_argument('--ndf', type=int, default=32,
 def main():
     global args, best_acc
     args = parser.parse_args()
+    print(args)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
     if args.cuda:
@@ -83,19 +85,18 @@ def main():
                             std=(0.229, 0.224, 0.225))])
     ######################
     ######################
+
+    old_transform = transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ]) 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
     train_loader = torch.utils.data.DataLoader(
         MNIST_t('../data', train=True, download=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
+                       transform=old_transform),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
-        MNIST_t('../data', train=False, transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
+        MNIST_t('../data', train=False, transform=old_transform),
         batch_size=args.batch_size, shuffle=True, **kwargs)
 
     # class Net(nn.Module):
@@ -125,7 +126,13 @@ def main():
     nc = 3
     ######################
     ######################
-    
+    descriptor = VGG(ngpu)
+    encoder = Encoder(ngpu)
+    #encoder.apply(weights_init)
+    decoder = Decoder(ngpu)
+    #decoder.apply(weights_init)
+
+    print(descriptor)
     model = Net()
     tnet = Tripletnet(model)
     if args.cuda:
@@ -166,6 +173,19 @@ def main():
             'state_dict': tnet.state_dict(),
             'best_prec1': best_acc,
         }, is_best)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def train(train_loader, tnet, criterion, optimizer, epoch):
     losses = AverageMeter()
