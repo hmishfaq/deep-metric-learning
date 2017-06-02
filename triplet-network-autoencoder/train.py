@@ -57,9 +57,12 @@ parser.add_argument('--nef', type=int, default=32,
                     help='number of output channels for the first encoder layer, default=32')
 parser.add_argument('--ndf', type=int, default=32,
                     help='number of output channels for the first decoder layer, default=32')
-parser.add_argument('--ngpu', type=int, default=1,
-                    help='number of GPUs to use')
+# parser.add_argument('--ngpu', type=int, default=1,
+#                     help='number of GPUs to use')
+parser.add_argument('--image_size', type=int, default=64,
+                    help='height/width length of the input images, default=64')
 
+#print(ngpu)
 ###########################
 ###########################
 
@@ -126,14 +129,14 @@ def main():
     nc = 3
     ######################
     ######################
-    descriptor = VGG(ngpu)
-    encoder = Encoder(ngpu)
+    descriptor = VGG()
+    encoder = Encoder()
     #encoder.apply(weights_init)
-    decoder = Decoder(ngpu)
+    decoder = Decoder()
     #decoder.apply(weights_init)
 
     print(descriptor)
-    model = Net()
+    model = encoder # Net()
     tnet = Tripletnet(model)
     if args.cuda:
         tnet.cuda()
@@ -152,7 +155,10 @@ def main():
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     cudnn.benchmark = True
-
+    ###
+    mse = nn.MSELoss()
+    kld_criterion = nn.KLDivLoss()
+    ###
     criterion = torch.nn.MarginRankingLoss(margin = args.margin)
     optimizer = optim.SGD(tnet.parameters(), lr=args.lr, momentum=args.momentum)
 
@@ -336,38 +342,11 @@ def weights_init(m):
         m.bias.data.zero_()
 
 
-
-class _VGG(nn.Module):
-    '''
-    Classic pre-trained VGG19 model.
-    Its forward call returns a list of the activations from
-    the predefined content layers.
-    '''
-
-    def __init__(self, ngpu):
-        super(_VGG, self).__init__()
-
-        self.ngpu = ngpu
-        features = models.vgg19(pretrained=True).features
-
-        self.features = nn.Sequential()
-        for i, module in enumerate(features):
-            name = layer_names[i]
-            self.features.add_module(name, module)
-
-    def forward(self, input):
-        batch_size = input.size(0)
-        all_outputs = []
-        output = input
-        for name, module in self.features.named_children():
-            if isinstance(output.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-                output = nn.parallel.data_parallel(
-                    module, output, range(self.ngpu))
-            else:
-                output = module(output)
-            if name in content_layers:
-                all_outputs.append(output.view(batch_size, -1))
-        return all_outputs
+def fpl_criterion(recon_features, targets):
+    fpl = 0
+    for f, target in zip(recon_features, targets):
+        fpl += mse(f, target.detach())#.div(f.size(1))
+    return fpl
 
 
 if __name__ == '__main__':

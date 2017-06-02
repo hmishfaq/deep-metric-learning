@@ -17,7 +17,7 @@ class Decoder(nn.Module):
 
     def __init__(self):
         super(Decoder, self).__init__()
-        #self.ngpu = ngpu
+        self.ngpu = ngpu
         self.decoder_dense = nn.Sequential(
             nn.Linear(nz, ndf * 8 * out_size * out_size),
             nn.ReLU(True)

@@ -18,10 +18,10 @@ class VGG(nn.Module):
     the predefined content layers.
     '''
 
-    def __init__(self, ngpu):
-        super(_VGG, self).__init__()
+    def __init__(self):
+        super(VGG, self).__init__()
 
-        self.ngpu = ngpu
+        #self.s = ngpu
         features = models.vgg19(pretrained=True).features
 
         self.features = nn.Sequential()
@@ -34,11 +34,11 @@ class VGG(nn.Module):
         all_outputs = []
         output = input
         for name, module in self.features.named_children():
-            if isinstance(output.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-                output = nn.parallel.data_parallel(
-                    module, output, range(self.ngpu))
-            else:
-                output = module(output)
+            # if isinstance(output.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+            #     output = nn.parallel.data_parallel(
+            #         module, output, range(self.ngpu))
+            # else:
+            output = module(output)
             if name in content_layers:
                 all_outputs.append(output.view(batch_size, -1))
         return all_outputs
