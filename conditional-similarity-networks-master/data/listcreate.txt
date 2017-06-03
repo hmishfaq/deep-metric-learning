@@ -1,0 +1,24 @@
+head -40 class_tripletlist_test.txt > ../smalltripletlists/class_tripletlist_test.txt
+head -40 closure_tripletlist_test.txt > ../smalltripletlists/closure_tripletlist_test.txt
+head -40 gender_tripletlist_test.txt > ../smalltripletlists/gender_tripletlist_test.txt
+head -40 heel_tripletlist_test.txt > ../smalltripletlists/heel_tripletlist_test.txt
+
+
+
+
+
+
+head -1000 class_tripletlist_train.txt > ../smalltripletlists/class_tripletlist_train.txt
+head -1000 closure_tripletlist_train.txt > ../smalltripletlists/closure_tripletlist_train.txt
+head -1000 gender_tripletlist_train.txt > ../smalltripletlists/gender_tripletlist_train.txt
+head -1000 heel_tripletlist_train.txt > ../smalltripletlists/heel_tripletlist_train.txt
+
+
+
+
+
+
+head -20 class_tripletlist_val.txt > ../smalltripletlists/class_tripletlist_val.txt
+head -20 closure_tripletlist_val.txt > ../smalltripletlists/closure_tripletlist_val.txt
+head -20 gender_tripletlist_val.txt > ../smalltripletlists/gender_tripletlist_val.txt
+head -20 heel_tripletlist_val.txt > ../smalltripletlists/heel_tripletlist_val.txt
