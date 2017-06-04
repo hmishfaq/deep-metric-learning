@@ -68,7 +68,9 @@ def main():
     global args, best_acc
     args = parser.parse_args()
     print(args)
+    #print(args.cuda)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
+    #cuda = args.cuda
     torch.manual_seed(args.seed)
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
@@ -120,7 +122,8 @@ def main():
     
     model = Resnet_18.resnet18(pretrained=True, embedding_size=args.dim_embed)
     csn_model = ConditionalSimNet(model, n_conditions=len(conditions), 
-        embedding_size=args.dim_embed, learnedmask=args.learned, prein=args.prein)
+        embedding_size=args.dim_embed, learnedmask=args.learned, prein=args.prein,
+        cuda= args.cuda)
     global mask_var
     mask_var = csn_model.masks.weight
     tnet = CS_Tripletnet(csn_model)
