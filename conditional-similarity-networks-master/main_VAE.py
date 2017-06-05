@@ -16,6 +16,7 @@ from visdom import Visdom
 import numpy as np
 import Resnet_18
 from csn import ConditionalSimNet
+import Vgg_19 
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -57,6 +58,12 @@ parser.add_argument('--visdom', dest='visdom', action='store_true',
                     help='Use visdom to track and plot')
 parser.add_argument('--conditions', nargs='*', type=int,
                     help='Set of similarity notions')
+
+#####
+parser.add_argument('--image_size', type=int, default=256,
+                    help='height/width length of the input images, default=64')
+
+#####
 parser.set_defaults(test=False)
 parser.set_defaults(learned=False)
 parser.set_defaults(prein=False)
@@ -87,13 +94,15 @@ def main():
     else:
         conditions = [0,1,2,3]
     
+
+    out_size = args.image_size // 2**5 #5 is because in vgg19 there are 5 pool layers
     kwargs = {'num_workers': 4, 'pin_memory': True} if args.cuda else {}
     train_loader = torch.utils.data.DataLoader(
         TripletImageLoader('data', 'ut-zap50k-images', 'filenames.json', 
             conditions, 'train', n_triplets=args.num_traintriplets,
                         transform=transforms.Compose([
-                            transforms.Scale(112),
-                            transforms.CenterCrop(112),
+                            transforms.Scale(args.image_size),
+                            transforms.CenterCrop(args.image_size),
                             transforms.RandomHorizontalFlip(),
                             transforms.ToTensor(),
                             normalize,
@@ -103,8 +112,8 @@ def main():
         TripletImageLoader('data', 'ut-zap50k-images', 'filenames.json', 
             conditions, 'test', n_triplets=160000,
                         transform=transforms.Compose([
-                            transforms.Scale(112),
-                            transforms.CenterCrop(112),
+                            transforms.Scale(args.image_size),
+                            transforms.CenterCrop(args.image_size),
                             transforms.ToTensor(),
                             normalize,
                     ])),
@@ -113,14 +122,16 @@ def main():
         TripletImageLoader('data', 'ut-zap50k-images', 'filenames.json', 
             conditions, 'val', n_triplets=80000,
                         transform=transforms.Compose([
-                            transforms.Scale(112),
-                            transforms.CenterCrop(112),
+                            transforms.Scale(args.image_size),
+                            transforms.CenterCrop(args.image_size),
                             transforms.ToTensor(),
                             normalize,
                     ])),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    model = Resnet_18.resnet18(pretrained=True, embedding_size=args.dim_embed)
+    #model = Resnet_18.resnet18(pretrained=True, embedding_size=args.dim_embed)
+    model = Vgg_19.vgg19(pretrained=True, embedding_size=args.dim_embed,out_size =out_size)
+    #embedding_size=64,output_size =8
     csn_model = ConditionalSimNet(model, n_conditions=len(conditions), 
         embedding_size=args.dim_embed, learnedmask=args.learned, prein=args.prein,
         cuda= args.cuda)
