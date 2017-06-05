@@ -60,7 +60,7 @@ parser.add_argument('--conditions', nargs='*', type=int,
                     help='Set of similarity notions')
 
 #####
-parser.add_argument('--image_size', type=int, default=256,
+parser.add_argument('--image_size', type=int, default=112,
                     help='height/width length of the input images, default=64')
 
 #####
@@ -129,7 +129,7 @@ def main():
                     ])),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     
-    #model = Resnet_18.resnet18(pretrained=True, embedding_size=args.dim_embed)
+    # model = Resnet_18.resnet18(pretrained=True, embedding_size=args.dim_embed)
     model = Vgg_19.vgg19(pretrained=True, embedding_size=args.dim_embed,out_size =out_size)
     #embedding_size=64,output_size =8
     csn_model = ConditionalSimNet(model, n_conditions=len(conditions), 
