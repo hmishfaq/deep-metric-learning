@@ -47,7 +47,7 @@ parser.add_argument('--mask_loss', type=float, default=5e-4, metavar='M',
                     help='parameter for loss for mask norm')
 parser.add_argument('--num_traintriplets', type=int, default=100000, metavar='N',
                     help='how many unique training triplets (default: 100000)')
-parser.add_argument('--dim_embed', type=int, default=64, metavar='N',
+parser.add_argument('--dim_embed', type=int, default=100, metavar='N',
                     help='how many dimensions in embedding (default: 64)')
 parser.add_argument('--test', dest='test', action='store_true',
                     help='To only run inference on test set')
@@ -318,9 +318,15 @@ class _Decoder(nn.Module):
 
 
 
-reconstruction_function = nn.BCELoss()
+# reconstruction_function = nn.BCELoss()
+# reconstruction_function.size_average = False
 def loss_function(recon_x, x, mu, logvar):
+    reconstruction_function = nn.BCELoss()
+    reconstruction_function.size_average = False
     BCE = reconstruction_function(recon_x, x)
+    # print('recon_x',recon_x)
+    # print('x',x)
+    # BCE = nn.BCELoss()
 
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -328,9 +334,32 @@ def loss_function(recon_x, x, mu, logvar):
     # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
     KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
     KLD = torch.sum(KLD_element).mul_(-0.5)
+    print(KLD)
+    print(BCE)
 
     return BCE + KLD
 
+########################
+########################
+
+mse = nn.MSELoss()
+kld_criterion = nn.KLDivLoss()
+
+def fpl_criterion(recon_features, targets):
+    fpl = 0
+    for f, target in zip(recon_features, targets):
+        fpl += mse(f, target.detach())#.div(f.size(1))
+    return fpl
+
+
+
+def loss_function(recon_x,x,mu,logvar,descriptor):
+    KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+    KLD = torch.sum(KLD_element).mul_(-0.5)
+    target_feature = descriptor(x)
+    recon_features = descriptor(recon_x)
+    FPL = fpl_criterion(recon_features, target_feature)
+    return KLD+FPL
 
 
 # mse = nn.MSELoss()
@@ -342,10 +371,10 @@ def loss_function(recon_x, x, mu, logvar):
 #         fpl += mse(f, target.detach())#.div(f.size(1))
 #     return fpl
 
+########################################################################
 
 
-
-def train(train_loader, tnet,decoder, criterion, optimizer, epoch):
+def train(train_loader, tnet,decoder, descriptor,criterion, optimizer, epoch):
     losses_metric = AverageMeter()
     losses_VAE = AverageMeter()
     accs = AverageMeter()
@@ -359,7 +388,7 @@ def train(train_loader, tnet,decoder, criterion, optimizer, epoch):
         if args.cuda:
             data1, data2, data3, c = data1.cuda(), data2.cuda(), data3.cuda(), c.cuda()
         data1, data2, data3, c = Variable(data1), Variable(data2), Variable(data3), Variable(c)
-
+        # print(data3.size())
         # compute output
         
         latent_x,mean_x,logvar_x,latent_y,mean_y,logvar_y,latent_z,mean_z,logvar_z,dist_a, dist_b = tnet(data1, data2, data3)
@@ -373,10 +402,22 @@ def train(train_loader, tnet,decoder, criterion, optimizer, epoch):
         reconstructed_x = decoder(latent_x)
         reconstructed_y = decoder(latent_y)
         reconstructed_z = decoder(latent_z)
-        loss_vae = loss_function(reconstructed_x, data1, mean_x, logvar_x)     
-        loss_vae += loss_function(reconstructed_z, data2, mean_y, logvar_y)  
-        loss_vae += loss_function(reconstructed_z, data3, mean_z, logvar_z)  
+
+        loss_vae = loss_function(reconstructed_x, data1, mean_x, logvar_x,descriptor)     
+        loss_vae += loss_function(reconstructed_z, data2, mean_y, logvar_y,descriptor)  
+        loss_vae += loss_function(reconstructed_z, data3, mean_z, logvar_z,descriptor)  
         loss_vae = loss_vae/(3*len(data1))
+
+        # kld = kld_criterion(F.log_softmax(latent_z), latent_labels)
+
+        # reconstructed_x_target = descriptor(data1)
+        # reconstructed_y_target = descriptor(data2)
+        # reconstructed_z_target = descriptor(data3)
+
+        # loss_vae = loss_function(reconstructed_x, data1, mean_x, logvar_x)     
+        # loss_vae += loss_function(reconstructed_z, data2, mean_y, logvar_y)  
+        # loss_vae += loss_function(reconstructed_z, data3, mean_z, logvar_z)  
+        # loss_vae = loss_vae/(3*len(data1))
 
         #target - vec of 1. This is what i want : dista >distb = True
         loss_triplet = criterion(dist_a, dist_b, target)
@@ -413,11 +454,14 @@ def train(train_loader, tnet,decoder, criterion, optimizer, epoch):
             train_acc_metric.append(accs.val)
 
 
-def test(test_loader, tnet, decoder,criterion, epoch):
+def test(test_loader, tnet, decoder,descriptor,criterion, epoch):
     # losses = AverageMeter()
     # accs = AverageMeter()
+    print("start test")
     losses_metric = AverageMeter()
+    losses_VAE = AverageMeter()
     accs = AverageMeter()
+    emb_norms = AverageMeter()
 
     accs_cs = {}
     for condition in conditions:
@@ -430,10 +474,11 @@ def test(test_loader, tnet, decoder,criterion, epoch):
             data1, data2, data3,c= data1.cuda(), data2.cuda(), data3.cuda(),c.cuda()
         data1, data2, data3, c = Variable(data1), Variable(data2), Variable(data3), Variable(c)
         c_test = c 
+        print(data1.size())
          
 
         # compute output
-        latent_x,mean_x,logvar_x,latent_y,mean_y,logvar_y,latent_z,mean_z,logvar_z,dist_a, dist_b = tnet(data1, data2, data3, c)
+        latent_x,mean_x,logvar_x,latent_y,mean_y,logvar_y,latent_z,mean_z,logvar_z,dist_a, dist_b = tnet(data1, data2, data3)
         target = torch.FloatTensor(dist_a.size()).fill_(1)
         if args.cuda:
             target = target.cuda()
@@ -442,9 +487,9 @@ def test(test_loader, tnet, decoder,criterion, epoch):
         reconstructed_x = decoder(latent_x)
         reconstructed_y = decoder(latent_y)
         reconstructed_z = decoder(latent_z)
-        loss_vae = loss_function(reconstructed_x, data1, mean_x, logvar_x)     
-        loss_vae += loss_function(reconstructed_z, data2, mean_y, logvar_y)  
-        loss_vae += loss_function(reconstructed_z, data3, mean_z, logvar_z)  
+        loss_vae = loss_function(reconstructed_x, data1, mean_x, logvar_x,descriptor)     
+        loss_vae += loss_function(reconstructed_z, data2, mean_y, logvar_y,descriptor)  
+        loss_vae += loss_function(reconstructed_z, data3, mean_z, logvar_z,descriptor)  
         loss_vae = loss_vae/(3*len(data1))
 
 
@@ -516,10 +561,29 @@ def accuracy_id(dist_a, dist_b, c, c_id):
     return ((pred > 0)*(c.cpu().data == c_id)).sum()*1.0/(c.cpu().data == c_id).sum()
 
 
+
+
+###############################
+###############################
+
+mse = nn.MSELoss()
+def fpl_criterion(recon_features, targets):
+    fpl = 0
+    for f, target in zip(recon_features, targets):
+        fpl += mse(f, target.detach())#.div(f.size(1))
+    return fpl
+
+kld_criterion = nn.KLDivLoss()
+###############################
+###############################
+
+
+
+
 def main():
     global args, best_acc
-    log_interval = 20
     global  log_interval
+    log_interval = 20
     args = parser.parse_args()
     print(args)
     nz = int(args.dim_embed)
@@ -619,10 +683,11 @@ def main():
     if args.cuda:
         decoder = decoder.cuda()
 
-    # descriptor = _VGG(ngpu)
-    # print(descriptor)
-    # if args.cuda:
-    #     descriptor = descriptor.cuda()
+    descriptor = _VGG(ngpu)
+    
+    if args.cuda:
+        descriptor = descriptor.cuda()
+    print(descriptor)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -659,16 +724,16 @@ def main():
     test_acc_metric = []
     ######
     if args.test:
-        test_acc = test(test_loader, tnet,decoder, criterion, 1)
+        test_acc = test(test_loader, tnet,decoder,descriptor, criterion, 1)
         sys.exit()
 
     for epoch in range(args.start_epoch, args.epochs + 1):
         # update learning rate
         adjust_learning_rate(optimizer, epoch)
         # train for one epoch
-        train(train_loader, tnet,decoder, criterion, optimizer, epoch)
+        train(train_loader, tnet,decoder,descriptor, criterion, optimizer, epoch)
         # evaluate on validation set
-        acc = test(val_loader, tnet,decoder, criterion, epoch)
+        acc = test(val_loader, tnet,decoder,descriptor, criterion, epoch)
 
         # remember best acc and save checkpoint
         is_best = acc > best_acc
