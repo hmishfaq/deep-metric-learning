@@ -38,10 +38,12 @@ class TripletImageLoader(torch.utils.data.Dataset):
         else:
             fnames = filenames['test']
         for condition in conditions:
-            for line in open(os.path.join(self.root, 'smalltripletlists', fnames[condition])):
+            for line in open(os.path.join(self.root, 'tripletlists', fnames[condition])):
                 triplets.append((line.split()[0], line.split()[1], line.split()[2], condition)) # anchor, far, close   
-        # print(triplets[:100])   
-        np.random.shuffle(triplets)
+        # print(triplets[:100])
+        # Ishfaq: shuffle when condition len more than 1 so that not subsetting only from one condtiion triplets 
+        if len(conditions) > 1:
+            np.random.shuffle(triplets)
         # print(triplets[:100])  
         self.triplets = triplets[:int(n_triplets * 1.0 * len(conditions) / 4)]
         self.transform = transform
