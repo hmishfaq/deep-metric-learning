@@ -19,7 +19,7 @@ import numpy as np
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-parser.add_argument('--batch_size', type=int, default=64, metavar='N',
+parser.add_argument('--batch_size', type=int, default=30, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--epochs', type=int, default=200, metavar='N',
                     help='number of epochs to train (default: 200)')
@@ -47,11 +47,11 @@ parser.add_argument('--mask_loss', type=float, default=5e-4, metavar='M',
                     help='parameter for loss for mask norm')
 # parser.add_argument('--num_traintriplets', type=int, default=100000, metavar='N',
 #                     help='how many unique training triplets (default: 100000)')
-parser.add_argument('--num_traintriplets', type=int, default=50000, metavar='N',
+parser.add_argument('--num_traintriplets', type=int, default=25000, metavar='N',
                     help='how many unique training triplets (default: 50000)')
-parser.add_argument('--num_valtriplets', type=int, default=10000, metavar='N',
+parser.add_argument('--num_valtriplets', type=int, default=5000, metavar='N',
                     help='how many unique validation triplets (default: 10000)')
-parser.add_argument('--num_testtriplets', type=int, default=20000, metavar='N',
+parser.add_argument('--num_testtriplets', type=int, default=10000, metavar='N',
                     help='how many unique test triplets (default: 20000)')
 
 
@@ -486,7 +486,8 @@ def test(test_loader, tnet, decoder,descriptor,criterion, epoch):
             data1, data2, data3,c= data1.cuda(), data2.cuda(), data3.cuda(),c.cuda()
         data1, data2, data3, c = Variable(data1), Variable(data2), Variable(data3), Variable(c)
         c_test = c 
-        print(data1.size())
+        # print(data1.size())
+        # print('val test')
          
 
         # compute output
@@ -733,7 +734,7 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
-    cudnn.benchmark = True
+    cudnn.benchmark = False
 
     criterion = torch.nn.MarginRankingLoss(margin = args.margin)
     # parameters = filter(lambda p: p.requires_grad, tnet.parameters())
