@@ -19,8 +19,8 @@ import numpy as np
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-parser.add_argument('--batch_size', type=int, default=256, metavar='N',
-                    help='input batch size for training (default: 256)')
+parser.add_argument('--batch_size', type=int, default=64, metavar='N',
+                    help='input batch size for training (default: 64)')
 parser.add_argument('--epochs', type=int, default=200, metavar='N',
                     help='number of epochs to train (default: 200)')
 parser.add_argument('--start_epoch', type=int, default=1, metavar='N',
@@ -45,8 +45,16 @@ parser.add_argument('--vae_loss', type=float, default=1e-2, metavar='M',
                     help='parameter for loss for embedding norm')
 parser.add_argument('--mask_loss', type=float, default=5e-4, metavar='M',
                     help='parameter for loss for mask norm')
-parser.add_argument('--num_traintriplets', type=int, default=100000, metavar='N',
-                    help='how many unique training triplets (default: 100000)')
+# parser.add_argument('--num_traintriplets', type=int, default=100000, metavar='N',
+#                     help='how many unique training triplets (default: 100000)')
+parser.add_argument('--num_traintriplets', type=int, default=50000, metavar='N',
+                    help='how many unique training triplets (default: 50000)')
+parser.add_argument('--num_valtriplets', type=int, default=10000, metavar='N',
+                    help='how many unique validation triplets (default: 10000)')
+parser.add_argument('--num_testtriplets', type=int, default=20000, metavar='N',
+                    help='how many unique test triplets (default: 20000)')
+
+
 parser.add_argument('--dim_embed', type=int, default=100, metavar='N',
                     help='how many dimensions in embedding (default: 64)')
 parser.add_argument('--test', dest='test', action='store_true',
@@ -82,6 +90,10 @@ parser.add_argument('--ngpu', type=int, default=1,
 parser.add_argument('--outf', default='./output',
                     help='folder to output images and model checkpoints')
 
+parser.add_argument('--beta1', type=float, default=0.1,
+                    help='beta1 for adam, default=0.1')
+parser.add_argument('--beta2', type=float, default=0.001,
+                    help='beta2 for adam, default=0.001')
 
 #####
 parser.set_defaults(test=False)
@@ -463,9 +475,9 @@ def test(test_loader, tnet, decoder,descriptor,criterion, epoch):
     accs = AverageMeter()
     emb_norms = AverageMeter()
 
-    accs_cs = {}
-    for condition in conditions:
-        accs_cs[condition] = AverageMeter()
+    # accs_cs = {}
+    # for condition in conditions:
+    #     accs_cs[condition] = AverageMeter()
 
     # switch to evaluation mode
     tnet.eval()
@@ -505,6 +517,8 @@ def test(test_loader, tnet, decoder,descriptor,criterion, epoch):
         losses_VAE.update(loss_vae.data[0], data1.size(0))
         accs.update(acc, data1.size(0))
         emb_norms.update(loss_embedd.data[0]/3, data1.size(0))
+        # for condition in conditions:
+        #     accs_cs[condition].update(accuracy_id(dista, distb, c_test, condition), data1.size(0))
 
         # emb_norms.update(loss_embedd.data[0])
     print('\nTest set: Average VAE loss: {:.4f}, Average Metric loss: {:.4f}, Metric Accuracy: {:.2f}%\n'.format(
@@ -583,7 +597,7 @@ kld_criterion = nn.KLDivLoss()
 def main():
     global args, best_acc
     global  log_interval
-    log_interval = 20
+    log_interval = 30
     args = parser.parse_args()
     print(args)
     nz = int(args.dim_embed)
@@ -620,8 +634,9 @@ def main():
         conditions = args.conditions
     else:
         conditions = [0,1,2,3]
-    
-
+    print("#"*20)
+    print('conditions are ' ,conditions)
+    print("#"*20)
     # out_size = args.image_size // 2**5 #5 is because in vgg19 there are 5 pool layers
     out_size = args.image_size // 16 # from garbage.py: Encoder makes x/2*4 w/ 4 conv/max layer
     kwargs = {'num_workers': 4, 'pin_memory': True} if args.cuda else {}
@@ -638,7 +653,7 @@ def main():
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
         TripletImageLoader('data', 'ut-zap50k-images', 'filenames.json', 
-            conditions, 'test', n_triplets=160000,
+            conditions, 'test', n_triplets=args.num_testtriplets,
                         transform=transforms.Compose([
                             transforms.Scale(args.image_size),
                             transforms.CenterCrop(args.image_size),
@@ -648,7 +663,7 @@ def main():
         batch_size=args.batch_size, shuffle=True, **kwargs)
     val_loader = torch.utils.data.DataLoader(
         TripletImageLoader('data', 'ut-zap50k-images', 'filenames.json', 
-            conditions, 'val', n_triplets=80000,
+            conditions, 'val', n_triplets=args.num_valtriplets,
                         transform=transforms.Compose([
                             transforms.Scale(args.image_size),
                             transforms.CenterCrop(args.image_size),
@@ -689,6 +704,15 @@ def main():
         descriptor = descriptor.cuda()
     print(descriptor)
 
+    global train_loss_metric,train_loss_VAE,train_acc_metric,test_loss_metric,test_loss_VAE,test_acc_metric
+    train_loss_metric = []
+    train_loss_VAE = []
+    train_acc_metric = []
+    test_loss_metric = []
+    test_loss_VAE = []
+    test_acc_metric = []
+
+
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -696,6 +720,13 @@ def main():
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
+            train_loss_metric = checkpoint['train_loss_metric']
+            train_loss_VAE = checkpoint['train_loss_VAE']
+            train_acc_metric = checkpoint['train_acc_metric']
+            test_loss_metric = checkpoint['test_loss_metric']
+            test_loss_VAE = checkpoint['test_loss_VAE']
+            test_acc_metric = checkpoint['test_acc_metric']
+
             tnet.load_state_dict(checkpoint['state_dict'])
             print("=> loaded checkpoint '{}' (epoch {})"
                     .format(args.resume, checkpoint['epoch']))
@@ -707,7 +738,7 @@ def main():
     criterion = torch.nn.MarginRankingLoss(margin = args.margin)
     # parameters = filter(lambda p: p.requires_grad, tnet.parameters())
     parameters = list(tnet.parameters()) + list(decoder.parameters())
-    optimizer = optim.Adam(parameters, lr=args.lr)
+    optimizer = optim.Adam(parameters, lr=args.lr, betas=(args.beta1, args.beta2))
 
     n_parameters = sum([p.data.nelement() for p in tnet.parameters()])
     print('  + Number of params in tnet: {}'.format(n_parameters))
@@ -715,13 +746,7 @@ def main():
 
     #####
     #####
-    global train_loss_metric,train_loss_VAE,train_acc_metric,test_loss_metric,test_loss_VAE,test_acc_metric
-    train_loss_metric = []
-    train_loss_VAE = []
-    train_acc_metric = []
-    test_loss_metric = []
-    test_loss_VAE = []
-    test_acc_metric = []
+    
     ######
     if args.test:
         test_acc = test(test_loader, tnet,decoder,descriptor, criterion, 1)
@@ -742,9 +767,20 @@ def main():
             'epoch': epoch + 1,
             'state_dict': tnet.state_dict(),
             'best_prec1': best_acc,
+            'train_loss_metric':train_loss_metric,
+            'train_loss_VAE':train_loss_VAE,
+            'train_acc_metric':train_acc_metric,
+            'test_loss_metric':test_loss_metric,
+            'test_loss_VAE':test_loss_VAE,
+            'test_acc_metric':test_acc_metric,
         }, is_best)
 
-
+# train_loss_metric = checkpoint['train_loss_metric']
+# train_loss_VAE = checkpoint['train_loss_VAE']
+# train_acc_metric = checkpoint['train_acc_metric']
+# test_loss_metric = checkpoint['test_loss_metric']
+# test_loss_VAE = checkpoint['test_loss_VAE']
+# test_acc_metric = checkpoint['test_acc_metric']
 
 if __name__ == '__main__':
     main()    
