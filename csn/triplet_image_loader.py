@@ -45,7 +45,8 @@ class TripletImageLoader(torch.utils.data.Dataset):
         if len(conditions) > 1:
             np.random.shuffle(triplets)
         # print(triplets[:100])  
-        self.triplets = triplets[:int(n_triplets * 1.0 * len(conditions) / 4)]
+        #self.triplets = triplets[:int(n_triplets * 1.0 * len(conditions) / 4)]
+        self.triplets = triplets[:int(n_triplets)]
         self.transform = transform
         self.loader = loader
 
